@@ -1,4 +1,3 @@
-
 # Triggered by upstream pipeline, downloads artifact, deploys
 # The pipeline auto-triggers when "dotnet-upstream-ci" completes
 resources:
