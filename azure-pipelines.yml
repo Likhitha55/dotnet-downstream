@@ -1,0 +1,105 @@
+
+# Triggered by upstream pipeline, downloads artifact, deploys
+# The pipeline auto-triggers when "dotnet-upstream-ci" completes
+resources:
+  pipelines:
+    - pipeline: upstream          
+      source: dotnet-upstream-ci  # name of my Upstream pipeline in Azure DevOps
+      trigger:
+        branches:
+          include:
+            - master
+
+# Manually trigger
+trigger: none
+
+pool:
+  name: aws-ec2-pool
+
+stages:
+  # ---- Stage 1: Download & Verify Artifact ----
+  - stage: DownloadAndVerify
+    displayName: 'Download & Verify Upstream Artifact'
+    jobs:
+      - job: VerifyJob
+        displayName: 'Download, Verify & Deploy'
+        steps:
+          # Step 1: Download artifact from upstream pipeline
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              buildType: 'specific'
+              project: '$(System.TeamProjectId)'
+              definition: '$(resources.pipeline.upstream.pipelineID)'
+              buildVersionToDownload: 'latest'
+              artifactName: 'dotnet-app'
+              targetPath: '$(Pipeline.Workspace)/upstream-artifact'
+            displayName: 'Download Upstream Artifact'
+
+          # Step 2: Verify artifact contents
+          - script: |
+              echo "============================================"
+              echo "  Stage 1: Verify Upstream Artifact"
+              echo "============================================"
+
+              ARTIFACT_DIR="$(Pipeline.Workspace)/upstream-artifact"
+
+              echo ""
+              echo "=== Artifact Contents ==="
+              ls -la $ARTIFACT_DIR/
+
+              echo ""
+              echo "=== Build Info ==="
+              if [ -f "$ARTIFACT_DIR/build-info.json" ]; then
+                cat $ARTIFACT_DIR/build-info.json
+                echo ""
+                echo "Build metadata found!"
+              else
+                echo "No build-info.json found"
+              fi
+
+              echo ""
+              echo "=== Checking for .NET binary ==="
+              if [ -f "$ARTIFACT_DIR/MyApp" ] || [ -f "$ARTIFACT_DIR/MyApp.dll" ]; then
+                echo "Application binary found!"
+              else
+                echo "Binary not found — listing all files:"
+                find $ARTIFACT_DIR -type f
+              fi
+            displayName: 'Verify Artifact'
+
+          # Step 3: Deploy (simulate)
+          - script: |
+              echo "============================================"
+              echo "  Stage 2: Deploy Application"
+              echo "============================================"
+
+              ARTIFACT_DIR="$(Pipeline.Workspace)/upstream-artifact"
+              DEPLOY_DIR="/opt/myapp"
+
+              echo ""
+              echo "=== Creating Deploy Directory ==="
+              sudo mkdir -p $DEPLOY_DIR
+              sudo cp -r $ARTIFACT_DIR/* $DEPLOY_DIR/
+              sudo chmod +x $DEPLOY_DIR/MyApp 2>/dev/null || true
+
+              echo ""
+              echo "=== Deploy Contents ==="
+              ls -la $DEPLOY_DIR/
+
+              echo ""
+              echo "=== Running Application ==="
+              if [ -f "$DEPLOY_DIR/MyApp" ]; then
+                $DEPLOY_DIR/MyApp
+              elif [ -f "$DEPLOY_DIR/MyApp.dll" ]; then
+                export PATH="$HOME/.dotnet:$PATH"
+                dotnet $DEPLOY_DIR/MyApp.dll
+              fi
+
+              echo ""
+              echo "============================================"
+              echo "  Deployment Complete!"
+              echo "  Triggered by: upstream pipeline"
+              echo "  Deployed to:  $DEPLOY_DIR"
+              echo "============================================"
+            displayName: 'Deploy Application'
+
