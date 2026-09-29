@@ -85,6 +85,14 @@ stages:
               echo "=== Deploy Contents ==="
               ls -la $DEPLOY_DIR/
 
+              # Install .NET 8 runtime (not full SDK — just runtime)
+              if ! dotnet --list-runtimes 2>/dev/null | grep -q "8.0"; then
+                curl -sSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
+                chmod +x dotnet-install.sh
+                ./dotnet-install.sh --channel 8.0 --runtime dotnet --install-dir $HOME/.dotnet
+              fi
+              export PATH="$HOME/.dotnet:$PATH"
+
               echo ""
               echo "=== Running Application ==="
               if [ -f "$DEPLOY_DIR/MyApp" ]; then
